@@ -186,3 +186,4 @@ int CameraUtil::capture(std::vector<cv::Mat> & imgs) {
 	}
 	return 0;
 }
+

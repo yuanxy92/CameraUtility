@@ -70,6 +70,7 @@ set(CUDA_NVCC_FLAGS
 
 set(MY_HEADER_FILES
 	# C++ header file
+	cuda/CameraUtilKernel.h
 	CameraUtil.h
 )
 
@@ -78,7 +79,7 @@ set(MY_SOURCE_FILES
 	CameraUtil.cpp
 	main.cpp
 	# cuda source file
-	cuda/CameraUtil.cu
+	cuda/CameraUtilKernel.cu
 )
 
 include_directories(

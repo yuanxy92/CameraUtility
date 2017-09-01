@@ -15,28 +15,16 @@
 // C++ 11 parallel 
 #include <thread>
 
+// point grey camera sdk: Spinnaker SDK
+#include "Spinnaker.h"
+#include "SpinGenApi/SpinnakerGenApi.h"
+
 // opencv
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
-// cuda
-#ifdef _WIN32
-#include <windows.h>
-#endif
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
-#include <device_launch_parameters.h>
-#include <surface_functions.h>
-
-// point grey camera sdk: Spinnaker SDK
-#include "Spinnaker.h"
-#include "SpinGenApi/SpinnakerGenApi.h"
-
-namespace CameraUtilKernel {
-
-}
+#include "./cuda/CameraUtilKernel.h"
 
 /**
 @brief pointgrey camera utlity class
