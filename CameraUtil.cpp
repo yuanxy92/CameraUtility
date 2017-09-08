@@ -187,3 +187,19 @@ int CameraUtil::capture(std::vector<cv::Mat> & imgs) {
 	return 0;
 }
 
+/**
+@brief get camera numbers
+@return int: camera number
+*/
+int CameraUtil::getCameraNum() {
+	return numCameras;
+}
+
+/**
+@brief get serial numbers
+@return int: camera number
+*/
+std::vector<std::string> CameraUtil::getCamSerialNums() {
+	return serialnums;
+}
+

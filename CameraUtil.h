@@ -74,6 +74,20 @@ public:
 	*/
 	int capture(std::vector<cv::Mat> & imgs);
 
+	/*******************************************************/
+	/*                 get function                        */
+	/*******************************************************/
+	/**
+	@brief get camera numbers
+	@return int: camera number
+	*/
+	int getCameraNum();
+	/**
+	@brief get serial numbers
+	@return int: camera number
+	*/
+	std::vector<std::string> getCamSerialNums();
+
 };
 
 #endif

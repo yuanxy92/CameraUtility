@@ -1,0 +1,138 @@
+/**
+@brief C++ source file of camera array class
+@author: Shane Yuan
+@date: Sep 2, 2017
+*/
+
+#include "CameraArray.h"
+
+/**************************************************************************/
+/*          VideoIO class, read video frames from camera array            */
+/**************************************************************************/
+CameraArray::CameraArray() {}
+CameraArray::~CameraArray() {}
+
+/**
+@brief init camera array class
+*/
+int CameraArray::init() {
+	camutil.init();
+	curBufferInd = new int;
+	*curBufferInd = 0;
+	this->lastCapturedFrameInd = -1;
+	return 0;
+}
+
+/**
+@brief release camera array
+*/
+int CameraArray::release() {
+	camutil.release();
+	delete curBufferInd;
+	return 0;
+}
+
+
+/**
+@brief pre-allocate buffers to cache images
+@param std::string serialnum: serial number of reference camera
+@param int frameNum: number of cached frames
+@return int
+*/
+int CameraArray::allocateBuffer(int frameNum) {
+	// calculate camera buffer map
+	bufferImgs.resize(frameNum);
+	for (size_t i = 0; i < frameNum; i++) {
+		bufferImgs[i].resize(camutil.getCameraNum());
+		for (size_t j = 0; j < camutil.getCameraNum(); j++) {
+			bufferImgs[i][j].create(3000, 4000, CV_8U);
+		}
+	}
+	this->frameNum = frameNum;
+	return 0;
+}
+
+/**
+@brief thread function to capture image using camera
+*/
+void camera_array_parallel_capture_(CameraUtil& util,
+	std::vector< std::vector<cv::Mat> > & imgs, int* curBufferInd, int fps) {
+	int frameNum = imgs.size();
+	float time = 1000.0f / static_cast<float>(fps);
+	for (;;) {
+		clock_t start, end;
+		start = clock();
+		// capture images
+		util.capture(imgs[*curBufferInd]);
+		*curBufferInd = (*curBufferInd + 1) % frameNum;
+		end = clock();
+		float waitTime = time - static_cast<double>(end - start) / CLOCKS_PER_SEC * 1000;
+		if (waitTime > 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds((long long)waitTime));
+		}
+		printf("Capture one frame, sleep %f miliseconds, current buffer ind: %d ...\n",
+			waitTime, *curBufferInd);
+	}
+}
+
+/**
+@brief start capture
+@param int fps;
+@return int
+*/
+int CameraArray::startCapture(int fps) {
+	this->fps = fps;
+	th = std::thread(camera_array_parallel_capture_, std::ref(camutil), std::ref(bufferImgs), curBufferInd, fps);
+	return 0;
+}
+
+/**
+@brief preview capture
+*/
+int CameraArray::previewCapture() {
+	float time = 1000.0f / static_cast<float>(12);
+	// init windows
+	for (int i = 0; i < camutil.getCameraNum(); i++)
+		cv::namedWindow(cv::format("cam_%02d", i));
+	// show images
+	int prev_ind = -1;
+	for (;;) {
+		clock_t start, end;
+		start = clock();
+
+		int ind = *curBufferInd;
+		if (ind != prev_ind) {
+			printf("show image %d, prev is %d ...\n", ind, prev_ind);
+			for (int i = 0; i < camutil.getCameraNum(); i++) {
+				cv::Mat img = bufferImgs[ind][i];
+				cv::resize(img, img, cv::Size(400, 300), cv::INTER_NEAREST);
+				cv::imshow(cv::format("cam_%02d", i), img);
+			}
+			prev_ind = ind;
+		}
+
+		end = clock();
+		float waitTime = time - static_cast<double>(end - start) / CLOCKS_PER_SEC * 1000;
+		if (waitTime > 0) {
+			cv::waitKey(waitTime);
+		}
+		else {
+			cv::waitKey(1);
+		}
+	}
+	return 0;
+}
+
+/**
+@brief stop capture
+@return int
+*/
+int CameraArray::stopCapture() {
+	th.join();
+	return 0;
+}
+
+
+
+
+
