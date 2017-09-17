@@ -76,6 +76,31 @@ void camera_array_parallel_capture_(CameraUtil& util,
 }
 
 /**
+@brief thread function to capture image using camera
+*/
+void camera_array_parallel_record_(CameraUtil& util,
+	std::vector< std::vector<cv::Mat> > & imgs, int* curBufferInd, int fps) {
+	int frameNum = imgs.size();
+	float time = 1000.0f / static_cast<float>(fps);
+	for (;;) {
+		clock_t start, end;
+		start = clock();
+		// capture images
+		util.capture(imgs[*curBufferInd]);
+		*curBufferInd = (*curBufferInd + 1) % frameNum;
+		if (*curBufferInd == 0)
+			break;
+		end = clock();
+		float waitTime = time - static_cast<double>(end - start) / CLOCKS_PER_SEC * 1000;
+		if (waitTime > 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds((long long)waitTime));
+		}
+		printf("Capture one frame, sleep %f miliseconds, current buffer ind: %d ...\n",
+			waitTime, *curBufferInd);
+	}
+}
+
+/**
 @brief start capture
 @param int fps;
 @return int
@@ -85,6 +110,30 @@ int CameraArray::startCapture(int fps) {
 	th = std::thread(camera_array_parallel_capture_, std::ref(camutil), std::ref(bufferImgs), curBufferInd, fps);
 	return 0;
 }
+
+/**
+@brief write recorded video into file
+@param std::string dir: dir to save recorded videos
+@return int
+*/
+int CameraArray::writeVideo(std::string dir) {
+
+	return 0;
+}
+
+/**
+@brief camera start recording
+@return int
+*/
+int CameraArray::startRecord(int fps) {
+	this->fps = fps;
+	th = std::thread(camera_array_parallel_record_, std::ref(camutil), std::ref(bufferImgs), curBufferInd, fps);
+	th.join();
+
+
+	return 0;
+}
+
 
 /**
 @brief preview capture

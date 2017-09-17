@@ -25,6 +25,12 @@ public:
 	std::vector< std::vector<cv::Mat> > bufferImgs;
 	std::thread th;
 private:
+	/**
+	@brief write recorded video into file
+	@param std::string dir: dir to save recorded videos
+	@return int
+	*/
+	int writeVideo(std::string dir);
 
 public:
 	CameraArray();
@@ -49,6 +55,12 @@ public:
 	@return int
 	*/
 	int startCapture(int fps);
+
+	/**
+	@brief camera start recording
+	@return int
+	*/
+	int startRecord(int fps);
 
 	/**
 	@brief preview capture
