@@ -6,7 +6,7 @@ int main(int argc, char* argv[]) {
 	array.init();
 	array.allocateBuffer(20);
 	array.startCapture(12);
-	array.previewCapture();
+	//array.previewCapture();
 	array.release();
 	return 0;
 }
