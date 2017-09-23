@@ -65,7 +65,7 @@ public:
 	/**
 	@brief preview capture
 	*/
-	int previewCapture();
+	int saveCapture(std::string dir);
 
 	/**
 	@brief stop capture

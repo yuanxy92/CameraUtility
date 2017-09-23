@@ -138,35 +138,11 @@ int CameraArray::startRecord(int fps) {
 /**
 @brief preview capture
 */
-int CameraArray::previewCapture() {
-	float time = 1000.0f / static_cast<float>(12);
-	// init windows
-	for (int i = 0; i < camutil.getCameraNum(); i++)
-		cv::namedWindow(cv::format("cam_%02d", i));
-	// show images
-	int prev_ind = -1;
-	for (;;) {
-		clock_t start, end;
-		start = clock();
-
-		int ind = *curBufferInd;
-		if (ind != prev_ind) {
-			printf("show image %d, prev is %d ...\n", ind, prev_ind);
-			for (int i = 0; i < camutil.getCameraNum(); i++) {
-				cv::Mat img = bufferImgs[ind][i];
-				cv::resize(img, img, cv::Size(400, 300), cv::INTER_NEAREST);
-				cv::imshow(cv::format("cam_%02d", i), img);
-			}
-			prev_ind = ind;
-		}
-
-		end = clock();
-		float waitTime = time - static_cast<double>(end - start) / CLOCKS_PER_SEC * 1000;
-		if (waitTime > 0) {
-			cv::waitKey(waitTime);
-		}
-		else {
-			cv::waitKey(1);
+int CameraArray::saveCapture(std::string dir) {
+	for (size_t i = 0; i < bufferImgs.size(); i++) {
+		for (size_t j = 0; j < bufferImgs[i].size(); j++) {
+			cv::Mat imgcolor = CameraUtilKernel::demosaic(bufferImgs[i][j]);
+			cv::imwrite(cv::format("%s/cam_%02d_frame_%05d.jpg", dir.c_str(), j, i), imgcolor);
 		}
 	}
 	return 0;
