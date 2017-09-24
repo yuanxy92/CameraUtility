@@ -1,6 +1,6 @@
 # PointGrey Camera Array Utility
 
-## Environment
+## Libraries
 - Spinnaker SDK (downloaded from FLIR/Pointgrey website)
 - OpenCV >= 3.0
 - Windows Visual Studio 2015 (Linux or other Visual Studio Version should be OK, but untested), do not use Visual Studio 2017 now!
