@@ -17,7 +17,6 @@ CameraArray::~CameraArray() {}
 */
 int CameraArray::init() {
 	camutil.init();
-	camutil.setWhiteBalance(1.10f, 1.60f);
 	curBufferInd = new int;
 	*curBufferInd = 0;
 	this->lastCapturedFrameInd = -1;
@@ -162,6 +161,28 @@ int CameraArray::stopCapture() {
 	return 0;
 }
 
+/**
+@brief set white balance
+@param int ind: input index of camera
+@param float red: red value in white balance
+@param float blue: blue value in white balance
+@return int
+*/
+int CameraArray::setWhiteBalance(int ind, float red, float blue) {
+	this->camutil.setWhiteBalance(ind, red, blue);
+	return 0;
+}
+
+/**
+@brief set white balance for all the cameras
+@param float red: red value in white balance
+@param float blue: blue value in white balance
+@return int
+*/
+int CameraArray::setWhiteBalance(float red, float blue) {
+	this->camutil.setWhiteBalance(red, blue);
+	return 0;
+}
 
 
 
