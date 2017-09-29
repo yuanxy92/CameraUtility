@@ -139,11 +139,15 @@ int CameraArray::startRecord(int fps) {
 @brief preview capture
 */
 int CameraArray::saveCapture(std::string dir) {
-	for (size_t i = 0; i < bufferImgs.size(); i++) {
-		for (size_t j = 0; j < bufferImgs[i].size(); j++) {
+	for (size_t j = 0; j < bufferImgs[0].size(); j++) {
+		cv::VideoWriter writer(cv::format("%s/cam_%02d.avi", dir.c_str(), j), 
+			cv::VideoWriter::fourcc('D', 'I', 'V', 'X'), 12, cv::Size(4000, 3000), true);
+		for (size_t i = 0; i < bufferImgs.size(); i++) {
 			cv::Mat imgcolor = CameraUtilKernel::demosaic(bufferImgs[i][j]);
-			cv::imwrite(cv::format("%s/cam_%02d_frame_%05d.jpg", dir.c_str(), j, i), imgcolor);
+			//cv::imwrite(cv::format("%s/cam_%02d_frame_%05d.jpg", dir.c_str(), j, i), imgcolor);
+			writer << imgcolor;
 		}
+		writer.release();
 	}
 	return 0;
 }

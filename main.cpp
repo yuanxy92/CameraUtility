@@ -4,7 +4,7 @@
 int main(int argc, char* argv[]) {
 	CameraArray array;
 	array.init();
-	array.allocateBuffer(100);
+	array.allocateBuffer(200);
 	array.startRecord(12);
 	array.saveCapture("E:\\Project\\CameraUtil\\data");
 	array.release();
