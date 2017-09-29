@@ -17,6 +17,7 @@ CameraArray::~CameraArray() {}
 */
 int CameraArray::init() {
 	camutil.init();
+	camutil.setWhiteBalance(1.10f, 1.60f);
 	curBufferInd = new int;
 	*curBufferInd = 0;
 	this->lastCapturedFrameInd = -1;

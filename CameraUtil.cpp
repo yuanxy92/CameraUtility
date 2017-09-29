@@ -196,11 +196,11 @@ int CameraUtil::capture(std::vector<cv::Mat> & imgs) {
 */
 int CameraUtil::setWhiteBalance(int ind, float red, float blue) {
 	// get nodemap
-	Spinnaker::GenApi::INodeMap & nodeMap = camList.GetByIndex(ind)->GetTLDeviceNodeMap();
+	Spinnaker::GenApi::INodeMap & nodeMap = camList.GetByIndex(ind)->GetNodeMap();
 	// get white balance
 	Spinnaker::GenApi::CFloatPtr balanceRatio = nodeMap.GetNode("BalanceRatio");
-	Spinnaker::GenApi::CEnumerationPtr balanceWhiteAuto = nodeMap.GetNode("BalanceWhiteAuto");
-	balanceWhiteAuto->SetIntValue(balanceWhiteAuto->GetEntryByName("Off")->GetValue());
+	//Spinnaker::GenApi::CEnumerationPtr balanceWhiteAuto = nodeMap.GetNode("BalanceWhiteAuto");
+	//balanceWhiteAuto->SetIntValue(balanceWhiteAuto->GetEntryByName("Off")->GetValue());
 	Spinnaker::GenApi::CEnumerationPtr balanceRatioSelector = nodeMap.GetNode("BalanceRatioSelector");
 	balanceRatioSelector->SetIntValue(balanceRatioSelector->GetEntryByName("Blue")->GetValue());
 	balanceRatio->SetValue(blue);
