@@ -74,6 +74,23 @@ public:
 	*/
 	int capture(std::vector<cv::Mat> & imgs);
 
+	/**
+	@brief set white balance
+	@param int ind: input index of camera
+	@param float red: red value in white balance
+	@param float blue: blue value in white balance
+	@return int
+	*/
+	int setWhiteBalance(int ind, float red, float blue);
+	
+	/**
+	@brief set white balance for all the cameras
+	@param float red: red value in white balance
+	@param float blue: blue value in white balance
+	@return int
+	*/
+	int setWhiteBalance(float red, float blue);
+
 	/*******************************************************/
 	/*                 get function                        */
 	/*******************************************************/

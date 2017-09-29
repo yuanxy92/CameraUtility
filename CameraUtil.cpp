@@ -188,6 +188,41 @@ int CameraUtil::capture(std::vector<cv::Mat> & imgs) {
 }
 
 /**
+@brief set white balance
+@param int ind: input index of camera
+@param float red: red value in white balance
+@param float blue: blue value in white balance
+@return int
+*/
+int CameraUtil::setWhiteBalance(int ind, float red, float blue) {
+	// get nodemap
+	Spinnaker::GenApi::INodeMap & nodeMap = camList.GetByIndex(ind)->GetTLDeviceNodeMap();
+	// get white balance
+	Spinnaker::GenApi::CFloatPtr balanceRatio = nodeMap.GetNode("BalanceRatio");
+	Spinnaker::GenApi::CEnumerationPtr balanceWhiteAuto = nodeMap.GetNode("BalanceWhiteAuto");
+	balanceWhiteAuto->SetIntValue(balanceWhiteAuto->GetEntryByName("Off")->GetValue());
+	Spinnaker::GenApi::CEnumerationPtr balanceRatioSelector = nodeMap.GetNode("BalanceRatioSelector");
+	balanceRatioSelector->SetIntValue(balanceRatioSelector->GetEntryByName("Blue")->GetValue());
+	balanceRatio->SetValue(blue);
+	balanceRatioSelector->SetIntValue(balanceRatioSelector->GetEntryByName("Red")->GetValue());
+	balanceRatio->SetValue(red);
+	return 0;
+}
+
+/**
+@brief set white balance for all the cameras
+@param float red: red value in white balance
+@param float blue: blue value in white balance
+@return int
+*/
+int CameraUtil::setWhiteBalance(float red, float blue) {
+	for (size_t camInd = 0; camInd < this->numCameras; camInd++) {
+		this->setWhiteBalance(camInd, red, blue);
+	}
+	return 0;
+}
+
+/**
 @brief get camera numbers
 @return int: camera number
 */
