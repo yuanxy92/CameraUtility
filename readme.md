@@ -12,11 +12,11 @@ I use FL3-U3-120S3C camera with 4000x3000 resolution. Please modify the code her
 CameraArray.cpp line_48, the image resolution parameters
 ```
 for (size_t i = 0; i < frameNum; i++) {
-		bufferImgs[i].resize(camutil.getCameraNum());
-		for (size_t j = 0; j < camutil.getCameraNum(); j++) {
-			bufferImgs[i][j].create(3000, 4000, CV_8U);
-		}
+	bufferImgs[i].resize(camutil.getCameraNum());
+	for (size_t j = 0; j < camutil.getCameraNum(); j++) {
+		bufferImgs[i][j].create(3000, 4000, CV_8U);
 	}
+}
 ```
 
 There may be other bugs. #^_^#
