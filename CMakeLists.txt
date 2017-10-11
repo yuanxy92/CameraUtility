@@ -44,6 +44,9 @@ set(MY_HEADER_FILES
 	cuda/CameraUtilKernel.h
 	CameraUtil.h
 	CameraArray.h
+	NPPJpegCoder.h
+	helper_cuda.h
+	helper_string.h
 )
 
 set(MY_SOURCE_FILES 
@@ -51,6 +54,7 @@ set(MY_SOURCE_FILES
 	CameraUtil.cpp
 	CameraArray.cpp
 	main.cpp
+	NPPJpegCoder.cpp
 	# cuda source file
 	cuda/CameraUtilKernel.cu
 )
@@ -68,12 +72,16 @@ cuda_add_executable(${name}
 if (USE_LIB)
 	target_link_libraries(${name}
 		${OpenCV_LIBS}
+		${CUDA_npp_LIBRARY}
+		${CUDA_nppc_LIBRARY}
 		debug ${PTGREY_SDK_LIBRARY_DEBUG}
 		optimized ${PTGREY_SDK_LIBRARY_RELEASE}
 	)
 else()
 	target_link_libraries(${name}
 		${OpenCV_LIBS}
+		${CUDA_npp_LIBRARY}
+		${CUDA_nppc_LIBRARY}
 		debug ${PTGREY_SDK_LIBRARY_DEBUG}
 		optimized ${PTGREY_SDK_LIBRARY_RELEASE}
 	)

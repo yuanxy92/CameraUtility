@@ -4,6 +4,9 @@
 @date: Sep 1, 2017
 */
 
+#ifndef __CAMERA_UTIL_KERNEL_H__
+#define __CAMERA_UTIL_KERNEL_H__
+
 // basic 
 #include <iostream>
 #include <cstdlib>
@@ -56,3 +59,5 @@ namespace CameraUtilKernel {
 	cv::Mat demosaic(cv::Mat bayerImg);
 
 }
+
+#endif
