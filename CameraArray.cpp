@@ -21,6 +21,7 @@ int CameraArray::init() {
 	*curBufferInd = 0;
 	this->lastCapturedFrameInd = -1;
 	// init compression coderes
+	coders.resize(camutil.getCameraNum());
 	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
 		coders[i].init(4000, 3000, 75);
 	}
@@ -183,12 +184,10 @@ int CameraArray::startRecord(int fps) {
 }
 
 void camera_array_compress_jpeg_(npp::NPPJpegCoder coder, cv::Mat img,
-	unsigned char* tempJpegdata, char* jpegdata, size_t* length) {
+	unsigned char* tempJpegdata, size_t* length) {
 	int dataLength;
 	coder.encode(img, tempJpegdata, &dataLength);
-	jpegdata = new char[dataLength];
 	*length = dataLength;
-	memcpy(jpegdata, tempJpegdata, dataLength);
 }
 
 /**
@@ -203,11 +202,17 @@ int CameraArray::startRecordJPEG(int fps) {
 		tempImg[i].create(3000, 4000, CV_8UC1);
 	}
 	// init temp jpeg compression data buffer
+	tempJpegdata.resize(camutil.getCameraNum());
 	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
 		tempJpegdata[i] = new unsigned char[1024 * 1024 * 10];
 	}
 	// init thread
 	std::vector<std::thread> ths;
+	// init cuda stream
+	std::vector<cudaStream_t > streams(camutil.getCameraNum());
+	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+		cudaStreamCreate(&streams[i]);
+	}
 	// start recording
 	for (;;) {
 		clock_t start, end;
@@ -216,12 +221,19 @@ int CameraArray::startRecordJPEG(int fps) {
 		camutil.capture(tempImg);
 		// compression
 		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
-			ths.push_back(std::thread(camera_array_compress_jpeg_,
-				coders[i], tempImg[i], tempJpegdata[i], jpegdatas[*curBufferInd][i],
-				&jpegdatalength[*curBufferInd][i]));
+			//ths.push_back(std::thread(camera_array_compress_jpeg_,
+			//	coders[i], tempImg[i], tempJpegdata[i],
+			//	&jpegdatalength[*curBufferInd][i]));
+			nppSetStream(streams[i]);
+			camera_array_compress_jpeg_(
+				coders[i], tempImg[i], tempJpegdata[i], 
+				&jpegdatalength[*curBufferInd][i]);
 		}
 		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
-			ths[i].join();
+			// synchronization
+			cudaStreamSynchronize(streams[i]);
+			jpegdatas[*curBufferInd][i] = new char[jpegdatalength[*curBufferInd][i]];
+			memcpy(jpegdatas[*curBufferInd][i], tempJpegdata[i], jpegdatalength[*curBufferInd][i]);
 		}
 		// increase buffer index
 		*curBufferInd = (*curBufferInd + 1) % frameNum;
@@ -262,7 +274,7 @@ int CameraArray::saveCapture(std::string dir) {
 int CameraArray::saveCaptureJPEGCompressed(std::string dir) {
 	for (size_t j = 0; j < jpegdatas[0].size(); j++) {
 		for (size_t i = 0; i < jpegdatas.size(); i++) {
-			std::string name = cv::format("%s/img_%02d_%05d.jpg", j, i);
+			std::string name = cv::format("%s/img_%02d_%05d.jpg", dir.c_str(), j, i);
 			std::ofstream outputFile(name.c_str(), std::ios::out | std::ios::binary);
 			outputFile.write(jpegdatas[i][j], jpegdatalength[i][j]);
 		}

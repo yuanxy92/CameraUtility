@@ -506,6 +506,13 @@ namespace npp {
 		orect.y = 0;
 		orect.width = bayerRGImg.cols;
 		orect.height = bayerRGImg.rows;
+
+		//luminPitch = pitch[0];
+		//chromaPitchU = pitch[1];
+		//chromaPitchV = pitch[2];
+		//NPPJpegCoderKernel::bayerRG2patchYUV(bayerRGImg, apDstImage[0], apDstImage[1],
+		//	apDstImage[2], luminPitch, chromaPitchU, chromaPitchV);
+
 		// bayer to rgb
 		NPP_CHECK_NPP(nppiCFAToRGB_8u_C1C3R(bayer_img_d, bayerRGImg.cols, osize,
 			orect, rgb_img_d, step_rgb, NPPI_BAYER_RGGB, NPPI_INTER_UNDEFINED));
