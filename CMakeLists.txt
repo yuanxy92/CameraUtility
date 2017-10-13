@@ -42,6 +42,7 @@ set(CUDA_NVCC_FLAGS
 set(MY_HEADER_FILES
 	# C++ header file
 	cuda/CameraUtilKernel.h
+	cuda/NPPJpegCoderKernel.h
 	CameraUtil.h
 	CameraArray.h
 	NPPJpegCoder.h
@@ -57,6 +58,7 @@ set(MY_SOURCE_FILES
 	NPPJpegCoder.cpp
 	# cuda source file
 	cuda/CameraUtilKernel.cu
+	cuda/NPPJpegCoderKernel.cu
 )
 
 include_directories(

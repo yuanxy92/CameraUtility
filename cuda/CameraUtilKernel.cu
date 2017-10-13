@@ -41,6 +41,7 @@ __global__ void CameraUtilKernel::demosaic(cv::cuda::PtrStep<uchar> bayerImg,
 	}
 }
 
+
 /**
 @brief demosaic function
 @param cv::Mat bayerImg: input bayer image
@@ -58,3 +59,5 @@ cv::Mat CameraUtilKernel::demosaic(cv::Mat bayerImg) {
 	gpuImg.download(bgrImg);
 	return bgrImg;
 }
+
+

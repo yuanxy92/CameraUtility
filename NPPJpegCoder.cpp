@@ -4,8 +4,6 @@
 @date Oct 11, 2017
 */
 
-
-
 // opencv
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
@@ -16,6 +14,8 @@
 #include <fstream>
 #include <iostream>
 
+#include "NPPJpegCoderKernel.h"
+
 #include "Exceptions.h"
 #include "NPPJpegCoder.h"
 
@@ -23,6 +23,8 @@
 #include "helper_cuda.h"
 
 using namespace std;
+
+#define MEASURE_KERNEL_TIME
 
 namespace npp {
 
@@ -303,11 +305,35 @@ namespace npp {
 	@brief init jpeg encoder
 	@return
 	*/
-	int NPPJpegCoder::init(int width, int height) {
+	int NPPJpegCoder::init(int width, int height, int quality) {
 		if (printfNPPinfo(2, 0) == false) {
 			cerr << "jpegNPP requires a GPU with Compute Capability 2.0 or higher" << endl;
 			exit(-1);
 		}
+		// calculate quantization table from quality
+		float s;
+		if (quality < 50) 
+			s = 5000.0f / quality;
+		else s = 200.0f - 2 * quality;
+		for (size_t i = 0; i < 64; i++) {
+			// luminance
+			float luminVal = (float)quantiztionTableLuminance[i];
+			luminVal = floor((s * luminVal + 50.0f) / 100.0f);
+			if (luminVal < 1)
+				luminVal = 1;
+			else if (luminVal > 255)
+				luminVal = 255;
+			quantiztionTableLuminance[i] = (unsigned char)luminVal;
+			// chroma
+			float chromaVal = (float)quantiztionTableChroma[i];
+			chromaVal = floor((s * chromaVal + 50.0f) / 100.0f);
+			if (chromaVal < 1)
+				chromaVal = 1;
+			else if (chromaVal > 255)
+				chromaVal = 255;
+			quantiztionTableChroma[i] = (unsigned char)chromaVal;
+		}
+
 		// set width and height
 		this->width = width;
 		this->height = height;
@@ -414,11 +440,13 @@ namespace npp {
 			aDstImageStep[i] = static_cast<Npp32s>(nPitch);
 
 			NPP_CHECK_CUDA(cudaHostAlloc(&aphDCT[i], aDCTStep[i] * oBlocks.height, cudaHostAllocDefault));
+
+			pitch[i] = nPitch;
 		}
 
 		
 		// Huffman Encoding
-		NPP_CHECK_CUDA(cudaMalloc(&pdScan, 4 << 20));
+		NPP_CHECK_CUDA(cudaMalloc(&pdScan, 4 << 23));
 		NPP_CHECK_NPP(nppiEncodeHuffmanGetSize(aSrcSize[0], 3, &nTempSize));
 		NPP_CHECK_CUDA(cudaMalloc(&pJpegEncoderTemp, nTempSize));
 
@@ -431,23 +459,20 @@ namespace npp {
 	*/
 	int NPPJpegCoder::encode(unsigned char* rawdata, unsigned char* jpegdata) {
 		
-		cv::Mat img = cv::imread("scaled.jpg");
-		cv::cvtColor(img, img, cv::COLOR_BGR2YCrCb);
-		std::vector<cv::Mat> imgch;
-		cv::split(img, imgch);
-		cv::resize(imgch[1], imgch[1], cv::Size(img.cols / 2, img.rows / 2));
-		cv::resize(imgch[2], imgch[2], cv::Size(img.cols / 2, img.rows / 2));
+		cv::Mat img = cv::imread("capture.png");
 
-
-	/*	cudaMemcpy(apDstImage[0], imgch[0].data, sizeof(unsigned char) * aDstSize[0].width * aDstSize[0].height, 
-			cudaMemcpyHostToDevice);
-		cudaMemcpy(apDstImage[1], imgch[1].data, sizeof(unsigned char) * aDstSize[1].width * aDstSize[1].height,
-			cudaMemcpyHostToDevice);
-		cudaMemcpy(apDstImage[2], imgch[2].data, sizeof(unsigned char) * aDstSize[2].width * aDstSize[2].height,
-			cudaMemcpyHostToDevice);*/
-		//apDstImage[0] = imgch[0].data;
-		//apDstImage[1] = imgch[1].data;
-		//apDstImage[2] = imgch[2].data;
+#ifdef MEASURE_KERNEL_TIME
+		cudaEvent_t start, stop;
+		float elapsedTime;
+		cudaEventCreate(&start);
+		cudaEventRecord(start, 0);
+#endif
+		cv::Mat bayerRGImg = NPPJpegCoderKernel::bgr2bayerRG(img);
+		luminPitch = pitch[0];
+		chromaPitchU = pitch[1];
+		chromaPitchV = pitch[2];
+		NPPJpegCoderKernel::bayerRG2patchYUV(bayerRGImg, apDstImage[0], apDstImage[1],
+			apDstImage[2], luminPitch, chromaPitchU, chromaPitchV);
 
 		NppiDCTState *pDCTState;
 		NPP_CHECK_NPP(nppiDCTInitAlloc(&pDCTState));
@@ -469,7 +494,7 @@ namespace npp {
 			pJpegEncoderTemp));
 		
 		// Write JPEG
-		unsigned char *pDstJpeg = new unsigned char[4 << 20];
+		unsigned char *pDstJpeg = new unsigned char[4 << 23];
 		unsigned char *pDstOutput = pDstJpeg;
 
 		writeMarker(0x0D8, pDstOutput);
@@ -485,9 +510,19 @@ namespace npp {
 		NPP_CHECK_CUDA(cudaMemcpy(pDstOutput, pdScan, nScanLength, cudaMemcpyDeviceToHost));
 		pDstOutput += nScanLength;
 		writeMarker(0x0D9, pDstOutput);
+
+#ifdef MEASURE_KERNEL_TIME
+		cudaEventCreate(&stop);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&elapsedTime, start, stop);
+		printf("JPEG encode: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
+#endif
+
+
 		{
 			// Write result to file.
-			std::ofstream outputFile("2.jpg", ios::out | ios::binary);
+			std::ofstream outputFile("Capture_paint2.jpg", ios::out | ios::binary);
 			outputFile.write(reinterpret_cast<const char *>(pDstJpeg), static_cast<int>(pDstOutput - pDstJpeg));
 		}
 

@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
 	//array.release();
 
 	npp::NPPJpegCoder coder;
-	coder.init(1280, 800);
+	coder.init(1280, 800, 75);
 	unsigned char* rawdata = NULL;
 	unsigned char* jpegdata = NULL;
 	coder.encode(rawdata, jpegdata);
