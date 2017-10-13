@@ -1,4 +1,4 @@
-/*
+﻿/*
 @brief c++ source class for NPP jpeg coder
 @author Shane Yuan
 @date Oct 11, 2017
@@ -298,11 +298,13 @@ namespace npp {
 	@brief constructor
 	*/
 	NPPJpegCoder::NPPJpegCoder() {}
-
 	NPPJpegCoder::~NPPJpegCoder() {}
 
 	/**
 	@brief init jpeg encoder
+	@param int width: input image width
+	@param int height: input image height
+	@param int quality: jpeg encoding quality
 	@return
 	*/
 	int NPPJpegCoder::init(int width, int height, int quality) {
@@ -446,7 +448,7 @@ namespace npp {
 
 		
 		// Huffman Encoding
-		NPP_CHECK_CUDA(cudaMalloc(&pdScan, 4 << 23));
+		NPP_CHECK_CUDA(cudaMalloc(&pdScan, sizeof(unsigned char) * 1024 * 1024 * 10));
 		NPP_CHECK_NPP(nppiEncodeHuffmanGetSize(aSrcSize[0], 3, &nTempSize));
 		NPP_CHECK_CUDA(cudaMalloc(&pJpegEncoderTemp, nTempSize));
 
@@ -454,12 +456,33 @@ namespace npp {
 	}
 
 	/**
+	@brief release jpeg encode
+	@return int
+	*/
+	int NPPJpegCoder::release() {
+		// release memory
+		for (int i = 0; i < 3; ++i) {
+			nppiEncodeHuffmanSpecFree_JPEG(apHuffmanDCTable[i]);
+			nppiEncodeHuffmanSpecFree_JPEG(apHuffmanACTable[i]);
+			cudaFree(apdDCT[i]);
+			cudaFreeHost(aphDCT[i]);
+			cudaFree(apDstImage[i]);
+		}
+		cudaFree(pJpegEncoderTemp);
+		cudaFree(pdQuantizationTables);
+		cudaFree(pdScan);
+		return 0;
+	}
+
+	/**
 	@brief encode raw image data to jpeg
+	@param cv::Mat bayerRGImg: input bayer image
+	@param char* jpegdata: output jpeg data
+	@param int* datalength: output data length
 	@return
 	*/
-	int NPPJpegCoder::encode(unsigned char* rawdata, unsigned char* jpegdata) {
-		
-		cv::Mat img = cv::imread("capture.png");
+	int NPPJpegCoder::encode(cv::Mat bayerRGImg, unsigned char* jpegdata, int* datalength) {
+		NppiDCTState *pDCTState;
 
 #ifdef MEASURE_KERNEL_TIME
 		cudaEvent_t start, stop;
@@ -467,14 +490,30 @@ namespace npp {
 		cudaEventCreate(&start);
 		cudaEventRecord(start, 0);
 #endif
-		cv::Mat bayerRGImg = NPPJpegCoderKernel::bgr2bayerRG(img);
-		luminPitch = pitch[0];
-		chromaPitchU = pitch[1];
-		chromaPitchV = pitch[2];
-		NPPJpegCoderKernel::bayerRG2patchYUV(bayerRGImg, apDstImage[0], apDstImage[1],
-			apDstImage[2], luminPitch, chromaPitchU, chromaPitchV);
 
-		NppiDCTState *pDCTState;
+		Npp8u* bayer_img_d;
+		Npp8u* rgb_img_d;
+		int step_rgb;
+		cudaMalloc(&bayer_img_d, sizeof(unsigned char) * width * height);
+		cudaMemcpy(bayer_img_d, bayerRGImg.data, sizeof(unsigned char) * width * height, cudaMemcpyHostToDevice);
+		rgb_img_d = nppiMalloc_8u_C3(width, height, &step_rgb);
+		// debayer
+		NppiSize osize;
+		osize.width = bayerRGImg.cols;
+		osize.height = bayerRGImg.rows;
+		NppiRect orect;
+		orect.x = 0;
+		orect.y = 0;
+		orect.width = bayerRGImg.cols;
+		orect.height = bayerRGImg.rows;
+		// bayer to rgb
+		NPP_CHECK_NPP(nppiCFAToRGB_8u_C1C3R(bayer_img_d, bayerRGImg.cols, osize,
+			orect, rgb_img_d, step_rgb, NPPI_BAYER_RGGB, NPPI_INTER_UNDEFINED));
+
+		// rgb to yuv420
+		NPP_CHECK_NPP(nppiRGBToYUV420_8u_C3P3R(rgb_img_d, step_rgb, apDstImage, aDstImageStep,
+			osize));
+
 		NPP_CHECK_NPP(nppiDCTInitAlloc(&pDCTState));
 		// Forward DCT
 		for (int i = 0; i < 3; ++i) {
@@ -494,8 +533,7 @@ namespace npp {
 			pJpegEncoderTemp));
 		
 		// Write JPEG
-		unsigned char *pDstJpeg = new unsigned char[4 << 23];
-		unsigned char *pDstOutput = pDstJpeg;
+		unsigned char *pDstOutput = jpegdata;
 
 		writeMarker(0x0D8, pDstOutput);
 		writeJFIFTag(pDstOutput);
@@ -518,20 +556,14 @@ namespace npp {
 		cudaEventElapsedTime(&elapsedTime, start, stop);
 		printf("JPEG encode: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
 #endif
+		
 
-
-		{
-			// Write result to file.
-			std::ofstream outputFile("Capture_paint2.jpg", ios::out | ios::binary);
-			outputFile.write(reinterpret_cast<const char *>(pDstJpeg), static_cast<int>(pDstOutput - pDstJpeg));
-		}
-
-		for (int i = 0; i < 3; ++i) {
-			nppiEncodeHuffmanSpecFree_JPEG(apHuffmanDCTable[i]);
-			nppiEncodeHuffmanSpecFree_JPEG(apHuffmanACTable[i]);
-		}
-
+		// calculate compressed jpeg data length
+		*datalength = static_cast<size_t>(pDstOutput - jpegdata);
+		// release gpu memory
 		nppiDCTFree(pDCTState);
+		cudaFree(bayer_img_d);
+		nppiFree(rgb_img_d);
 
 		return 0;
 	}

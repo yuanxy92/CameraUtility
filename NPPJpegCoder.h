@@ -224,16 +224,27 @@ namespace npp {
 
 		/**
 		@brief init jpeg encoder
+		@param int width: input image width
+		@param int height: input image height
+		@param int quality: jpeg encoding quality
 		@return 
 		*/
 		int init(int width, int height, int quality = -1);
 
+		/**
+		@brief release jpeg encode
+		@return int
+		*/
+		int release();
 
 		/**
 		@brief encode raw image data to jpeg
+		@param cv::Mat bayerRGImg: input bayer image
+		@param unsigned char* jpegdata: output jpeg data
+		@param int* datalength: output data length
 		@return
 		*/
-		int encode(unsigned char* rawdata, unsigned char* jpegdata);
+		int encode(cv::Mat, unsigned char* jpegdata, int* datalength);
 	};
 
 };

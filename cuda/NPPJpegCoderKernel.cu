@@ -73,6 +73,19 @@ __global__ void NPPJpegCoderKernel::kernel_bayerRG2pitchYUV(unsigned char* bayer
 	}
 }
 
+__global__ void NPPJpegCoderKernel::kernel_test(unsigned char* data, int step, int width, int height,
+	cv::cuda::PtrStep<uchar3> img) {
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < width && y < height) {
+		uchar r = data[y * step + 3 * x + 0];
+		uchar g = data[y * step + 3 * x + 1];
+		uchar b = data[y * step + 3 * x + 2];
+		img.ptr(y)[x] = make_uchar3(b, g, r);
+	}
+}
+
 /*************************************************************************/
 /*                   GPU function for NPP Jpeg Coder                     */
 /*************************************************************************/
@@ -130,4 +143,16 @@ cv::Mat NPPJpegCoderKernel::bgr2bayerRG(cv::Mat input) {
 		}
 	}
 	return bayerRGImg;
+}
+
+int NPPJpegCoderKernel::test(unsigned char* data, int step, int width, int height, cv::Mat & img) {
+	cv::cuda::GpuMat img_d(height, width, CV_8UC3);
+
+	dim3 dimBlock(32, 32);
+	dim3 dimGrid((width + dimBlock.x - 1) / dimBlock.x, (height + dimBlock.y - 1) / dimBlock.y);
+	kernel_test << <dimGrid, dimBlock >> >(data, step, width, height, img_d);
+
+	img_d.download(img);
+
+	return 0;
 }

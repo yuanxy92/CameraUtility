@@ -62,6 +62,9 @@ namespace NPPJpegCoderKernel {
 		unsigned char *Y, unsigned char *U, unsigned char *V, int width,
 		int height, int lumin_pitch, int chroma_pitch_U, int chroma_pitch_V);
 
+	__global__ void kernel_test(unsigned char* data, int step, int width, int height, cv::cuda::PtrStep<uchar3> img);
+
+
 	/*************************************************************************/
 	/*                   GPU function for NPP Jpeg Coder                     */
 	/*************************************************************************/
@@ -89,6 +92,8 @@ namespace NPPJpegCoderKernel {
 	@return cv::Mat bayerRG image
 	*/
 	cv::Mat bgr2bayerRG(cv::Mat input);
+
+	int test(unsigned char* data, int step, int width, int height, cv::Mat & img);
 }
 
 #endif
