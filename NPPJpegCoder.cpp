@@ -499,13 +499,13 @@ namespace npp {
 		rgb_img_d = nppiMalloc_8u_C3(width, height, &step_rgb);
 		// debayer
 		NppiSize osize;
-		osize.width = bayerRGImg.cols;
-		osize.height = bayerRGImg.rows;
+		osize.width = this->width;
+		osize.height = this->height;
 		NppiRect orect;
 		orect.x = 0;
 		orect.y = 0;
-		orect.width = bayerRGImg.cols;
-		orect.height = bayerRGImg.rows;
+		orect.width = this->width;
+		orect.height = this->height;
 
 		//luminPitch = pitch[0];
 		//chromaPitchU = pitch[1];

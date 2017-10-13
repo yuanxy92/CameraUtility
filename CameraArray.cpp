@@ -224,7 +224,7 @@ int CameraArray::startRecordJPEG(int fps) {
 		camutil.capture(tempImg);
 		// copy data to gpu
 		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
-			cudaMemcpyAsync(bayer_img_d[i], tempImg[i].data, 
+			cudaMemcpyAsync(bayer_img_ds[i], tempImg[i].data, 
 				sizeof(unsigned char) * 4000 * 3000, 
 				cudaMemcpyHostToDevice, streams[i]);			
 		}
@@ -233,7 +233,7 @@ int CameraArray::startRecordJPEG(int fps) {
 			// synchronization
 			cudaStreamSynchronize(streams[i]);
 			camera_array_compress_jpeg_(
-				coders[i], tempImg[i], tempJpegdata[i], 
+				coders[i], bayer_img_ds[i], tempJpegdata[i],
 				&jpegdatalength[*curBufferInd][i], streams[i]);
 		}
 		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
