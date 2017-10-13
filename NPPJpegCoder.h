@@ -242,9 +242,11 @@ namespace npp {
 		@param unsigned char* bayer_img_d: input bayer image
 		@param unsigned char* jpegdata: output jpeg data
 		@param int* datalength: output data length
+		@param cudaStream_t stream: cudastream
 		@return
 		*/
-		int encode(unsigned char* bayer_img_d, unsigned char* jpegdata, int* datalength);
+		int encode(unsigned char* bayer_img_d, unsigned char* jpegdata, 
+			int* datalength, cudaStream_t stream);
 	};
 
 };
