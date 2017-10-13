@@ -183,10 +183,10 @@ int CameraArray::startRecord(int fps) {
 	return 0;
 }
 
-void camera_array_compress_jpeg_(npp::NPPJpegCoder coder, cv::Mat img,
-	unsigned char* tempJpegdata, size_t* length) {
+void camera_array_compress_jpeg_(npp::NPPJpegCoder coder, unsigned char* img,
+	unsigned char* tempJpegdata, size_t* length, cudaStream_t stream) {
 	int dataLength;
-	coder.encode(img, tempJpegdata, &dataLength);
+	coder.encode(img, tempJpegdata, &dataLength, stream);
 	*length = dataLength;
 }
 
@@ -206,12 +206,15 @@ int CameraArray::startRecordJPEG(int fps) {
 	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
 		tempJpegdata[i] = new unsigned char[1024 * 1024 * 10];
 	}
-	// init thread
-	std::vector<std::thread> ths;
 	// init cuda stream
 	std::vector<cudaStream_t > streams(camutil.getCameraNum());
 	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
 		cudaStreamCreate(&streams[i]);
+	}
+	// init gpu bayer image memory
+	std::vector<unsigned char*> bayer_img_ds(camutil.getCameraNum());
+	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+		cudaMalloc(&bayer_img_ds[i], sizeof(unsigned char) * 4000 * 3000);
 	}
 	// start recording
 	for (;;) {
@@ -219,15 +222,19 @@ int CameraArray::startRecordJPEG(int fps) {
 		start = clock();
 		// capture images
 		camutil.capture(tempImg);
+		// copy data to gpu
+		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+			cudaMemcpyAsync(bayer_img_d[i], tempImg[i].data, 
+				sizeof(unsigned char) * 4000 * 3000, 
+				cudaMemcpyHostToDevice, streams[i]);			
+		}
 		// compression
 		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
-			//ths.push_back(std::thread(camera_array_compress_jpeg_,
-			//	coders[i], tempImg[i], tempJpegdata[i],
-			//	&jpegdatalength[*curBufferInd][i]));
-			nppSetStream(streams[i]);
+			// synchronization
+			cudaStreamSynchronize(streams[i]);
 			camera_array_compress_jpeg_(
 				coders[i], tempImg[i], tempJpegdata[i], 
-				&jpegdatalength[*curBufferInd][i]);
+				&jpegdatalength[*curBufferInd][i], streams[i]);
 		}
 		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
 			// synchronization

@@ -239,12 +239,12 @@ namespace npp {
 
 		/**
 		@brief encode raw image data to jpeg
-		@param cv::Mat bayerRGImg: input bayer image
+		@param unsigned char* bayer_img_d: input bayer image
 		@param unsigned char* jpegdata: output jpeg data
 		@param int* datalength: output data length
 		@return
 		*/
-		int encode(cv::Mat, unsigned char* jpegdata, int* datalength);
+		int encode(unsigned char* bayer_img_d, unsigned char* jpegdata, int* datalength);
 	};
 
 };
