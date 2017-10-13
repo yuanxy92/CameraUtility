@@ -20,6 +20,10 @@ int CameraArray::init() {
 	curBufferInd = new int;
 	*curBufferInd = 0;
 	this->lastCapturedFrameInd = -1;
+	// init compression coderes
+	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+		coders[i].init(4000, 3000, 75);
+	}
 	return 0;
 }
 
@@ -53,6 +57,24 @@ int CameraArray::allocateBuffer(int frameNum) {
 }
 
 /**
+@brief pre-allocate buffers to cache images (JPEG compressed version)
+@param std::string serialnum: serial number of reference camera
+@param int frameNum: number of cached frames
+@return int
+*/
+int CameraArray::allocateBufferJPEG(int frameNum) {
+	// calculate camera buffer map
+	jpegdatas.resize(frameNum);
+	jpegdatalength.resize(frameNum);
+	for (size_t i = 0; i < frameNum; i++) {
+		jpegdatas[i].resize(camutil.getCameraNum());
+		jpegdatalength[i].resize(camutil.getCameraNum());
+	}
+	this->frameNum = frameNum;
+	return 0;
+}
+
+/**
 @brief thread function to capture image using camera
 */
 void camera_array_parallel_capture_(CameraUtil& util,
@@ -76,7 +98,7 @@ void camera_array_parallel_capture_(CameraUtil& util,
 }
 
 /**
-@brief thread function to capture image using camera
+@brief thread function to record image using camera
 */
 void camera_array_parallel_record_(CameraUtil& util,
 	std::vector< std::vector<cv::Mat> > & imgs, int* curBufferInd, int fps) {
@@ -98,6 +120,34 @@ void camera_array_parallel_record_(CameraUtil& util,
 		printf("Capture one frame, sleep %f miliseconds, current buffer ind: %d ...\n",
 			waitTime, *curBufferInd);
 	}
+}
+
+/**
+@brief thread function to record image using camera and compress to jpeg
+*/
+void camera_array_parallel_record_jpeg_(CameraUtil& util,
+	std::vector< std::vector<char* > > & jpegdatas, 
+	std::vector< npp::NPPJpegCoder > coders,
+	int* curBufferInd,
+	int frameNum,
+	int fps) {
+	//float time = 1000.0f / static_cast<float>(fps);
+	//for (;;) {
+	//	clock_t start, end;
+	//	start = clock();
+	//	// capture images
+	//	util.capture(imgs[*curBufferInd]);
+	//	*curBufferInd = (*curBufferInd + 1) % frameNum;
+	//	if (*curBufferInd == 0)
+	//		break;
+	//	end = clock();
+	//	float waitTime = time - static_cast<double>(end - start) / CLOCKS_PER_SEC * 1000;
+	//	if (waitTime > 0) {
+	//		std::this_thread::sleep_for(std::chrono::milliseconds((long long)waitTime));
+	//	}
+	//	printf("Capture one frame, sleep %f miliseconds, current buffer ind: %d ...\n",
+	//		waitTime, *curBufferInd);
+	//}
 }
 
 /**
@@ -129,8 +179,62 @@ int CameraArray::startRecord(int fps) {
 	this->fps = fps;
 	th = std::thread(camera_array_parallel_record_, std::ref(camutil), std::ref(bufferImgs), curBufferInd, fps);
 	th.join();
+	return 0;
+}
 
+void camera_array_compress_jpeg_(npp::NPPJpegCoder coder, cv::Mat img,
+	unsigned char* tempJpegdata, char* jpegdata, size_t* length) {
+	int dataLength;
+	coder.encode(img, tempJpegdata, &dataLength);
+	jpegdata = new char[dataLength];
+	*length = dataLength;
+	memcpy(jpegdata, tempJpegdata, dataLength);
+}
 
+/**
+@brief camera start recording (JPEG compressed version)
+@return int
+*/
+int CameraArray::startRecordJPEG(int fps) {
+	float time = 1000.0f / static_cast<float>(fps);
+	// init temp image buffer
+	std::vector<cv::Mat> tempImg(camutil.getCameraNum());
+	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+		tempImg[i].create(3000, 4000, CV_8UC1);
+	}
+	// init temp jpeg compression data buffer
+	for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+		tempJpegdata[i] = new unsigned char[1024 * 1024 * 10];
+	}
+	// init thread
+	std::vector<std::thread> ths;
+	// start recording
+	for (;;) {
+		clock_t start, end;
+		start = clock();
+		// capture images
+		camutil.capture(tempImg);
+		// compression
+		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+			ths.push_back(std::thread(camera_array_compress_jpeg_,
+				coders[i], tempImg[i], tempJpegdata[i], jpegdatas[*curBufferInd][i],
+				&jpegdatalength[*curBufferInd][i]));
+		}
+		for (size_t i = 0; i < camutil.getCameraNum(); i++) {
+			ths[i].join();
+		}
+		// increase buffer index
+		*curBufferInd = (*curBufferInd + 1) % frameNum;
+		if (*curBufferInd == 0)
+			break;
+		end = clock();
+		float waitTime = time - static_cast<double>(end - start) / CLOCKS_PER_SEC * 1000;
+		if (waitTime > 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds((long long)waitTime));
+		}
+		printf("Capture one frame, sleep %f miliseconds, current buffer ind: %d ...\n",
+			waitTime, *curBufferInd);
+	}
 	return 0;
 }
 
@@ -148,6 +252,20 @@ int CameraArray::saveCapture(std::string dir) {
 			writer << imgcolor;
 		}
 		writer.release();
+	}
+	return 0;
+}
+
+/**
+@brief preview capture
+*/
+int CameraArray::saveCaptureJPEGCompressed(std::string dir) {
+	for (size_t j = 0; j < jpegdatas[0].size(); j++) {
+		for (size_t i = 0; i < jpegdatas.size(); i++) {
+			std::string name = cv::format("%s/img_%02d_%05d.jpg", j, i);
+			std::ofstream outputFile(name.c_str(), std::ios::out | std::ios::binary);
+			outputFile.write(jpegdatas[i][j], jpegdatalength[i][j]);
+		}
 	}
 	return 0;
 }

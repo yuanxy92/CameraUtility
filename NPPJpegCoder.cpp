@@ -24,7 +24,7 @@
 
 using namespace std;
 
-#define MEASURE_KERNEL_TIME
+//#define MEASURE_KERNEL_TIME
 
 namespace npp {
 
@@ -545,7 +545,9 @@ namespace npp {
 		writeHuffmanTable(pHuffmanDCTables[1], pDstOutput);
 		writeHuffmanTable(pHuffmanACTables[1], pDstOutput);
 		writeScanHeader(oScanHeader, pDstOutput);
+
 		NPP_CHECK_CUDA(cudaMemcpy(pDstOutput, pdScan, nScanLength, cudaMemcpyDeviceToHost));
+
 		pDstOutput += nScanLength;
 		writeMarker(0x0D9, pDstOutput);
 
@@ -557,7 +559,6 @@ namespace npp {
 		printf("JPEG encode: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
 #endif
 		
-
 		// calculate compressed jpeg data length
 		*datalength = static_cast<size_t>(pDstOutput - jpegdata);
 		// release gpu memory

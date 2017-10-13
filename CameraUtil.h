@@ -26,6 +26,8 @@
 
 #include "./cuda/CameraUtilKernel.h"
 
+
+
 /**
 @brief pointgrey camera utlity class
 */
@@ -36,6 +38,8 @@ private:
 	Spinnaker::SystemPtr system;
 	Spinnaker::CameraList camList;
 	std::vector<std::string> serialnums;
+
+	
 public:
 
 private:

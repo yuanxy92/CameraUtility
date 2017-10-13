@@ -130,6 +130,7 @@ int CameraUtil::init() {
 	}
 	// start capture
 	this->startCapture();
+	
 	return 0;
 }
 

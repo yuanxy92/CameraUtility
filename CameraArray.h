@@ -11,6 +11,8 @@
 // camera utility
 #include "CameraUtil.h"
 
+#include "NPPJpegCoder.h"
+
 /**************************************************************************/
 /*          VideoIO class, read video frames from camera array            */
 /**************************************************************************/
@@ -24,6 +26,13 @@ public:
 	int frameNum;
 	std::vector< std::vector<cv::Mat> > bufferImgs;
 	std::thread th;
+
+	// jpeg compression
+	// npp class for compression
+	std::vector<npp::NPPJpegCoder> coders;
+	std::vector<unsigned char*> tempJpegdata;
+	std::vector<std::vector<char*>> jpegdatas;
+	std::vector<std::vector<size_t>> jpegdatalength;
 private:
 	/**
 	@brief write recorded video into file
@@ -50,6 +59,14 @@ public:
 	int allocateBuffer(int frameNum);
 
 	/**
+	@brief pre-allocate buffers to cache images (JPEG compressed version)
+	@param std::string serialnum: serial number of reference camera
+	@param int frameNum: number of cached frames
+	@return int
+	*/
+	int allocateBufferJPEG(int frameNum);
+
+	/**
 	@brief start capture
 	@param int fps;
 	@return int
@@ -63,9 +80,20 @@ public:
 	int startRecord(int fps);
 
 	/**
+	@brief camera start recording (JPEG compressed version)
+	@return int
+	*/
+	int startRecordJPEG(int fps);
+
+	/**
 	@brief preview capture
 	*/
 	int saveCapture(std::string dir);
+
+	/**
+	@brief preview capture
+	*/
+	int saveCaptureJPEGCompressed(std::string dir);
 
 	/**
 	@brief stop capture
