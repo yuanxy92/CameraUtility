@@ -452,6 +452,9 @@ namespace npp {
 		NPP_CHECK_NPP(nppiEncodeHuffmanGetSize(aSrcSize[0], 3, &nTempSize));
 		NPP_CHECK_CUDA(cudaMalloc(&pJpegEncoderTemp, nTempSize));
 
+		// malloc rgb image buffer
+		rgb_img_d = nppiMalloc_8u_C3(width, height, &step_rgb);
+
 		return 0;
 	}
 
@@ -471,6 +474,7 @@ namespace npp {
 		cudaFree(pJpegEncoderTemp);
 		cudaFree(pdQuantizationTables);
 		cudaFree(pdScan);
+		nppiFree(rgb_img_d);
 		return 0;
 	}
 
@@ -494,9 +498,6 @@ namespace npp {
 		cudaEventRecord(start, 0);
 #endif
 
-		Npp8u* rgb_img_d;
-		int step_rgb;
-		rgb_img_d = nppiMalloc_8u_C3(width, height, &step_rgb);
 		// debayer
 		NppiSize osize;
 		osize.width = this->width;
@@ -538,6 +539,19 @@ namespace npp {
 			apHuffmanACTable,
 			aDstSize,
 			pJpegEncoderTemp));
+
+#ifdef MEASURE_KERNEL_TIME
+		cudaEventCreate(&stop);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&elapsedTime, start, stop);
+		printf("JPEG encode step1: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
+#endif
+
+#ifdef MEASURE_KERNEL_TIME
+		cudaEventCreate(&start);
+		cudaEventRecord(start, 0);
+#endif
 		
 		// Write JPEG
 		unsigned char *pDstOutput = jpegdata;
@@ -563,13 +577,13 @@ namespace npp {
 		cudaEventRecord(stop, 0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&elapsedTime, start, stop);
-		printf("JPEG encode: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
+		printf("JPEG encode step2: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
 #endif
+
 		// calculate compressed jpeg data length
 		*datalength = static_cast<size_t>(pDstOutput - jpegdata);
 		// release gpu memory
 		nppiDCTFree(pDCTState);
-		nppiFree(rgb_img_d);
 		return 0;
 	}
 };

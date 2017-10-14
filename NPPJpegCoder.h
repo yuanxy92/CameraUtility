@@ -102,6 +102,8 @@ namespace npp {
 		unsigned int pitch[3];
 		Npp8u *apDstImage[3];
 
+		Npp8u* rgb_img_d;
+		int step_rgb;
 		int luminPitch;
 		int chromaPitchU;
 		int chromaPitchV;
