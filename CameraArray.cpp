@@ -280,11 +280,17 @@ int CameraArray::saveCapture(std::string dir) {
 */
 int CameraArray::saveCaptureJPEGCompressed(std::string dir) {
 	for (size_t j = 0; j < jpegdatas[0].size(); j++) {
+		std::string videoname = cv::format("%s/video_%02d_scale.avi", dir.c_str(), j);
+		cv::VideoWriter writer(videoname, cv::VideoWriter::fourcc('D', 'I', 'V', 'X'), 12, cv::Size(4000, 3000), true);
 		for (size_t i = 0; i < jpegdatas.size(); i++) {
-			std::string name = cv::format("%s/img_%02d_%05d.jpg", dir.c_str(), j, i);
-			std::ofstream outputFile(name.c_str(), std::ios::out | std::ios::binary);
-			outputFile.write(jpegdatas[i][j], jpegdatalength[i][j]);
+			//std::ofstream outputFile(name.c_str(), std::ios::out | std::ios::binary);
+			//outputFile.write(jpegdatas[i][j], jpegdatalength[i][j]);
+			cv::Mat rawData = cv::Mat(1, jpegdatalength[i][j], CV_8UC1, jpegdatas[i][j]);
+			cv::Mat img = cv::imdecode(rawData, CV_LOAD_IMAGE_COLOR);
+			writer << img;
+			delete[] jpegdatas[i][j];
 		}
+		writer.release();
 	}
 	return 0;
 }
