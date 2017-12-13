@@ -1,5 +1,9 @@
 # PointGrey Camera Array Utility
 
+## Updated Dec 13, 2017
+update NPPJpegCoder class: add decode function
+- GTX 1070 takes about 4ms to decode a 4000x3000 jpeg YUV420 image
+
 ## Updated Oct 14, 2017
 add NPPJpegCoder class. Now this code can capture images and compress them in jpeg format in real time. 
 - GTX 1070 costs 50ms to compress 8 4000x3000 images
