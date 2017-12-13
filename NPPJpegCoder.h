@@ -87,6 +87,7 @@ namespace npp {
 		Npp32s aDCTStep[3];
 		NppiSize aDstSize[3];
 		Npp32s aDstImageStep[3];
+		Npp32s aSrcImageStep[3];
 
 		Npp8u *pdScan;
 		Npp8u *pJpegEncoderTemp;
@@ -97,16 +98,23 @@ namespace npp {
 		NppiEncodeHuffmanSpec *apHuffmanDCTable[3];
 		NppiEncodeHuffmanSpec *apHuffmanACTable[3];
 
+		NppiDecodeHuffmanSpec *apHuffmanDCTableDecode[3];
+		NppiDecodeHuffmanSpec *apHuffmanACTableDecode[3];
+
 		Npp16s *aphDCT[3];
 		Npp16s *apdDCT[3];
 		unsigned int pitch[3];
 		Npp8u *apDstImage[3];
+		Npp8u *apSrcImage[3];
 
 		Npp8u* rgb_img_d;
 		int step_rgb;
 		int luminPitch;
 		int chromaPitchU;
 		int chromaPitchV;
+
+		int nMCUBlocksH = 0;
+		int nMCUBlocksV = 0;
 
 	public:
 		// quantization table
@@ -245,10 +253,20 @@ namespace npp {
 		@param unsigned char* jpegdata: output jpeg data
 		@param int* datalength: output data length
 		@param cudaStream_t stream: cudastream
-		@return
+		@return int
 		*/
 		int encode(unsigned char* bayer_img_d, unsigned char* jpegdata, 
 			int* datalength, cudaStream_t stream);
+
+		/**
+		@brief decode jpeg image to raw image data (full)
+		@param unsigned char* jpegdata: input jpeg data
+		@param int input_datalength: input jpeg data length
+		@param cv::cuda::GpuMat: output gpu mat image
+		@return int
+		*/
+		int decode(unsigned char* jpegdata, int input_datalength,
+			cv::cuda::GpuMat & outimg);
 	};
 
 };

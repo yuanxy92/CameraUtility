@@ -9,18 +9,18 @@
 #define MEASURE_KERNEL_TIME
 
 int main(int argc, char* argv[]) {
-	CameraArray array;
-	array.init();
-	array.setWhiteBalance(1.10f, 1.65f);
-	//array.allocateBuffer(20);
-	array.allocateBufferJPEG(2000);
-	//array.startRecord(12);
-	array.startRecordJPEG(12);
-	//array.saveCapture("E:\\Project\\CameraUtil\\data");
-	array.saveCaptureJPEGCompressed("E:\\Project\\CameraUtil\\data");
-	array.release();
+	//CameraArray array;
+	//array.init();
+	//array.setWhiteBalance(1.10f, 1.65f);
+	////array.allocateBuffer(20);
+	//array.allocateBufferJPEG(2000);
+	////array.startRecord(12);
+	//array.startRecordJPEG(12);
+	////array.saveCapture("E:\\Project\\CameraUtil\\data");
+	//array.saveCaptureJPEGCompressed("E:\\Project\\CameraUtil\\data");
+	//array.release();
 
-	return 0;
+	//return 0;
 
 	size_t cameraNum = 8;
 
@@ -101,6 +101,15 @@ int main(int argc, char* argv[]) {
 		std::ofstream outputFile(name.c_str(), std::ios::out | std::ios::binary);
 		outputFile.write(jpegdatas[i], dataLengths[i]);
 	}
+	
+	// decoder
+	npp::NPPJpegCoder decoder;
+	decoder.init(4000, 3000, 75);
+	cv::cuda::GpuMat img(3000, 4000, CV_8UC3);
+	cv::Mat img_h;
+	decoder.decode(reinterpret_cast<unsigned char*>(jpegdatas[3]), dataLengths[3], img);
+	img.download(img_h);
+	cv::imwrite("decoding.jpg", img_h);
 
 	return 0;
 }

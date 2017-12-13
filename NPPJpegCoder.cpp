@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/cudaimgproc.hpp>
 
 #include <cmath>
 #include <string>
@@ -24,7 +25,7 @@
 
 using namespace std;
 
-//#define MEASURE_KERNEL_TIME
+#define MEASURE_KERNEL_TIME
 
 namespace npp {
 
@@ -413,13 +414,16 @@ namespace npp {
 			nppiEncodeHuffmanSpecInitAlloc_JPEG(pHuffmanACTables[(oScanHeader.aHuffmanTablesSelector[i] & 0x0f)].aCodes, nppiACTable, &apHuffmanACTable[i]);
 		}
 		
-		int nMCUBlocksH = 0;
-		int nMCUBlocksV = 0;
-
 		// Compute channel sizes as stored in the JPEG (8x8 blocks & MCU block layout)
 		for (int i = 0; i < oFrameHeader.nComponents; ++i) {
 			nMCUBlocksV = max(nMCUBlocksV, oFrameHeader.aSamplingFactors[i] & 0x0f);
 			nMCUBlocksH = max(nMCUBlocksH, oFrameHeader.aSamplingFactors[i] >> 4);
+		}
+		for (int i = 0; i < 3; ++i) {
+			nppiDecodeHuffmanSpecInitAllocHost_JPEG(pHuffmanDCTables[(oScanHeader.aHuffmanTablesSelector[i] >> 4)].aCodes,
+				nppiDCTable, &apHuffmanDCTableDecode[i]);
+			nppiDecodeHuffmanSpecInitAllocHost_JPEG(pHuffmanACTables[(oScanHeader.aHuffmanTablesSelector[i] & 0x0f)].aCodes,
+				nppiACTable, &apHuffmanACTableDecode[i]);
 		}
 
 		for (int i = 0; i < oFrameHeader.nComponents; ++i) {
@@ -446,6 +450,29 @@ namespace npp {
 			pitch[i] = nPitch;
 		}
 
+		for (int i = 0; i < oFrameHeader.nComponents; ++i) {
+			NppiSize oBlocks;
+			NppiSize oBlocksPerMCU = { oFrameHeader.aSamplingFactors[i] >> 4, oFrameHeader.aSamplingFactors[i] & 0x0f };
+
+			oBlocks.width = (int)ceil((oFrameHeader.nWidth + 7) / 8 *
+				static_cast<float>(oBlocksPerMCU.width) / nMCUBlocksH);
+			oBlocks.width = DivUp(oBlocks.width, oBlocksPerMCU.width) * oBlocksPerMCU.width;
+
+			oBlocks.height = (int)ceil((oFrameHeader.nHeight + 7) / 8 *
+				static_cast<float>(oBlocksPerMCU.height) / nMCUBlocksV);
+			oBlocks.height = DivUp(oBlocks.height, oBlocksPerMCU.height) * oBlocksPerMCU.height;
+
+			aSrcSize[i].width = oBlocks.width * 8;
+			aSrcSize[i].height = oBlocks.height * 8;
+
+			// Allocate Memory
+			size_t nPitch;
+			//NPP_CHECK_CUDA(cudaMallocPitch(&apdDCT[i], &nPitch, oBlocks.width * 64 * sizeof(Npp16s), oBlocks.height));
+			//aDCTStep[i] = static_cast<Npp32s>(nPitch);
+			NPP_CHECK_CUDA(cudaMallocPitch(&apSrcImage[i], &nPitch, aSrcSize[i].width, aSrcSize[i].height));
+			aSrcImageStep[i] = static_cast<Npp32s>(nPitch);
+			//NPP_CHECK_CUDA(cudaHostAlloc(&aphDCT[i], aDCTStep[i] * oBlocks.height, cudaHostAllocDefault));
+		}
 		
 		// Huffman Encoding
 		NPP_CHECK_CUDA(cudaMalloc(&pdScan, sizeof(unsigned char) * 1024 * 1024 * 10));
@@ -467,9 +494,12 @@ namespace npp {
 		for (int i = 0; i < 3; ++i) {
 			nppiEncodeHuffmanSpecFree_JPEG(apHuffmanDCTable[i]);
 			nppiEncodeHuffmanSpecFree_JPEG(apHuffmanACTable[i]);
+			nppiDecodeHuffmanSpecFreeHost_JPEG(apHuffmanDCTableDecode[i]);
+			nppiDecodeHuffmanSpecFreeHost_JPEG(apHuffmanACTableDecode[i]);
 			cudaFree(apdDCT[i]);
 			cudaFreeHost(aphDCT[i]);
 			cudaFree(apDstImage[i]);
+			cudaFree(apSrcImage[i]);
 		}
 		cudaFree(pJpegEncoderTemp);
 		cudaFree(pdQuantizationTables);
@@ -586,6 +616,172 @@ namespace npp {
 		nppiDCTFree(pDCTState);
 		return 0;
 	}
+
+	/**
+	@brief decode jpeg image to raw image data (full)
+	@param unsigned char* jpegdata: input jpeg data
+	@param int input_datalength: input jpeg data length
+	@param cv::cuda::GpuMat: output gpu mat image
+	@return int
+	*/
+	int NPPJpegCoder::decode(unsigned char* jpegdata, int input_datalength,
+		cv::cuda::GpuMat & outimg) {
+		// init state
+		NppiDCTState *pDCTState;
+		NPP_CHECK_NPP(nppiDCTInitAlloc(&pDCTState));
+
+#ifdef MEASURE_KERNEL_TIME
+		cudaEvent_t start, stop;
+		float elapsedTime;
+		cudaEventCreate(&start);
+		cudaEventRecord(start, 0);
+#endif
+
+		// check if this is a vlid JPEG file
+		int nPos = 0;
+		int nMarker = nextMarker(jpegdata, nPos, input_datalength);
+		if (nMarker != 0x0D8) {
+			std::cerr << "Invalid Jpeg Image" << std::endl;
+			return EXIT_FAILURE;
+		}
+		nMarker = nextMarker(jpegdata, nPos, input_datalength);
+		nMCUBlocksH = 0;
+		nMCUBlocksV = 0;
+
+		int nRestartInterval = -1;
+		while (nMarker != -1) {
+			if (nMarker == 0x0D8) {
+				// Embedded Thumbnail, skip it
+				int nNextMarker = nextMarker(jpegdata, nPos, input_datalength);
+				while (nNextMarker != -1 && nNextMarker != 0x0D9) {
+					nNextMarker = nextMarker(jpegdata, nPos, input_datalength);
+				}
+			}
+			if (nMarker == 0x0DD) {
+				readRestartInterval(jpegdata + nPos, nRestartInterval);
+			}
+			if ((nMarker == 0x0C0) | (nMarker == 0x0C2)) {
+				//Assert Baseline for this Sample
+				//Note: NPP does support progressive jpegs for both encode and decode
+				if (nMarker != 0x0C0) {
+					cerr << "The sample does only support baseline JPEG images" << endl;
+					return EXIT_SUCCESS;
+				}
+				// Baseline or Progressive Frame Header
+				readFrameHeader(jpegdata + nPos, oFrameHeader);
+#ifdef MEASURE_KERNEL_TIME	
+				cout << "Image Size: " << oFrameHeader.nWidth << "x" << oFrameHeader.nHeight << "x" << static_cast<int>(oFrameHeader.nComponents) << endl;
+#endif
+				//Assert 3-Channel Image for this Sample
+				if (oFrameHeader.nComponents != 3) {
+					cerr << "The sample does only support color JPEG images" << endl;
+					return EXIT_SUCCESS;
+				}
+				// Compute channel sizes as stored in the JPEG (8x8 blocks & MCU block layout)
+				for (int i = 0; i < oFrameHeader.nComponents; ++i) {
+					nMCUBlocksV = max(nMCUBlocksV, oFrameHeader.aSamplingFactors[i] & 0x0f);
+					nMCUBlocksH = max(nMCUBlocksH, oFrameHeader.aSamplingFactors[i] >> 4);
+				}
+				//for (int i = 0; i < oFrameHeader.nComponents; ++i) {
+				//	NppiSize oBlocks;
+				//	NppiSize oBlocksPerMCU = { oFrameHeader.aSamplingFactors[i] >> 4, oFrameHeader.aSamplingFactors[i] & 0x0f };
+
+				//	oBlocks.width = (int)ceil((oFrameHeader.nWidth + 7) / 8 *
+				//		static_cast<float>(oBlocksPerMCU.width) / nMCUBlocksH);
+				//	oBlocks.width = DivUp(oBlocks.width, oBlocksPerMCU.width) * oBlocksPerMCU.width;
+
+				//	oBlocks.height = (int)ceil((oFrameHeader.nHeight + 7) / 8 *
+				//		static_cast<float>(oBlocksPerMCU.height) / nMCUBlocksV);
+				//	oBlocks.height = DivUp(oBlocks.height, oBlocksPerMCU.height) * oBlocksPerMCU.height;
+
+				//	aSrcSize[i].width = oBlocks.width * 8;
+				//	aSrcSize[i].height = oBlocks.height * 8;
+
+				//	// Allocate Memory
+				//	size_t nPitch;
+				//	NPP_CHECK_CUDA(cudaMallocPitch(&apdDCT[i], &nPitch, oBlocks.width * 64 * sizeof(Npp16s), oBlocks.height));
+				//	aDCTStep[i] = static_cast<Npp32s>(nPitch);
+				//	NPP_CHECK_CUDA(cudaMallocPitch(&apSrcImage[i], &nPitch, aSrcSize[i].width, aSrcSize[i].height));
+				//	aSrcImageStep[i] = static_cast<Npp32s>(nPitch);
+				//	NPP_CHECK_CUDA(cudaHostAlloc(&aphDCT[i], aDCTStep[i] * oBlocks.height, cudaHostAllocDefault));
+				//}
+			}
+			if (nMarker == 0x0DB) {
+				// Quantization Tables
+				readQuantizationTables(jpegdata + nPos, aQuantizationTables);
+			}
+			if (nMarker == 0x0C4) {
+				// Huffman Tables
+				readHuffmanTables(jpegdata + nPos, aHuffmanTables);
+			}
+			if (nMarker == 0x0DA) {
+				// Scan
+				readScanHeader(jpegdata + nPos, oScanHeader);
+				nPos += 6 + oScanHeader.nComponents * 2;
+				int nAfterNextMarkerPos = nPos;
+				int nAfterScanMarker = nextMarker(jpegdata, nAfterNextMarkerPos, input_datalength);
+				if (nRestartInterval > 0) {
+					while (nAfterScanMarker >= 0x0D0 && nAfterScanMarker <= 0x0D7) {
+						// This is a restart marker, go on
+						nAfterScanMarker = nextMarker(jpegdata, nAfterNextMarkerPos, input_datalength);
+					}
+				}
+				//for (int i = 0; i < 3; ++i) {
+				//	nppiDecodeHuffmanSpecInitAllocHost_JPEG(pHuffmanDCTables[(oScanHeader.aHuffmanTablesSelector[i] >> 4)].aCodes,
+				//		nppiDCTable, &apHuffmanDCTableDecode[i]);
+				//	nppiDecodeHuffmanSpecInitAllocHost_JPEG(pHuffmanACTables[(oScanHeader.aHuffmanTablesSelector[i] & 0x0f)].aCodes,
+				//		nppiACTable, &apHuffmanACTableDecode[i]);
+				//}
+				NPP_CHECK_NPP(nppiDecodeHuffmanScanHost_JPEG_8u16s_P3R(jpegdata + nPos, nAfterNextMarkerPos - nPos - 2,
+					nRestartInterval, oScanHeader.nSs, oScanHeader.nSe, oScanHeader.nA >> 4, oScanHeader.nA & 0x0f,
+					aphDCT, aDCTStep,
+					apHuffmanDCTableDecode,
+					apHuffmanACTableDecode,
+					aSrcSize));
+				//for (int i = 0; i < 3; ++i){
+				//	nppiDecodeHuffmanSpecFreeHost_JPEG(apHuffmanDCTableDecode[i]);
+				//	nppiDecodeHuffmanSpecFreeHost_JPEG(apHuffmanACTableDecode[i]);
+				//}
+			}
+			nMarker = nextMarker(jpegdata, nPos, input_datalength);
+		}
+		// Copy DCT coefficients and Quantization Tables from host to device
+		for (int i = 0; i < 4; ++i) {
+			NPP_CHECK_CUDA(cudaMemcpyAsync(pdQuantizationTables + i * 64, aQuantizationTables[i].aTable, 64, cudaMemcpyHostToDevice));
+		}
+		for (int i = 0; i < 3; ++i) {
+			NPP_CHECK_CUDA(cudaMemcpyAsync(apdDCT[i], aphDCT[i], aDCTStep[i] * aSrcSize[i].height / 8, cudaMemcpyHostToDevice));
+		}
+		// Inverse DCT
+		for (int i = 0; i < 3; ++i) {
+			NPP_CHECK_NPP(nppiDCTQuantInv8x8LS_JPEG_16s8u_C1R_NEW(apdDCT[i], aDCTStep[i],
+				apSrcImage[i], aSrcImageStep[i],
+				pdQuantizationTables + oFrameHeader.aQuantizationTableSelector[i] * 64,
+				aSrcSize[i],
+				pDCTState));
+		}
+		// convert from YUV to BGR
+		// yuv420 to rgb
+		NppiSize osize;
+		osize.width = this->width;
+		osize.height = this->height;
+
+		NPP_CHECK_NPP(nppiYUV420ToBGR_8u_P3C3R(apSrcImage, aSrcImageStep, outimg.data, outimg.step,
+			osize));
+
+#ifdef MEASURE_KERNEL_TIME
+		cudaEventCreate(&stop);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&elapsedTime, start, stop);
+		printf("JPEG decode: (file:%s, line:%d) elapsed time : %f ms\n", __FILE__, __LINE__, elapsedTime);
+#endif
+		// release gpu memory
+		nppiDCTFree(pDCTState);
+
+		return 0;
+	}
+
 };
 
 
