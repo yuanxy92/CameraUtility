@@ -1,4 +1,7 @@
 # PointGrey Camera Array Utility
+## Updated Jan 4, 2018
+This repository is no longer maintained. Please move to the new General Camera Driver.
+https://github.com/yuanxy92/GenCameraDriver
 
 ## Updated Dec 13, 2017
 update NPPJpegCoder class: add decode function
